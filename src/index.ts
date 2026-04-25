@@ -409,7 +409,8 @@ async function generateGamelist(batoceraRomsPath: string) {
       xmlContent += `  <game>\n`;
       xmlContent += `    <path>./${romFile}</path>\n`;
       if (imageFound) {
-        xmlContent += `    <td>${imagePathRelative}</image>\n`;
+        xmlContent += `    <image>${imagePathRelative}</image>\n`;
+        xmlContent += `    <thumbnail>${imagePathRelative}</thumbnail>\n`;
         imageCount++;
       }
       xmlContent += `  </game>\n`;

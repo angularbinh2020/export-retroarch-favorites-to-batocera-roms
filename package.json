@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "gamelist": "node dist/index.js --gamelist"
   },
   "dependencies": {
     "fs-extra": "^11.1.1"

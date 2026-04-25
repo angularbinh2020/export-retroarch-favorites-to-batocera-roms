@@ -1,9 +1,7 @@
-Dưới đây là nội dung file `README.md` mới, phản ánh đúng việc chương trình ưu tiên sử dụng `db_name` từ playlist.
-
 ```markdown
 # RetroArch to Batocera Exporter
 
-Chương trình giúp xuất các mục yêu thích (favorites) từ RetroArch (file `content_favorites.lpl`) cùng với ảnh thumbnails đã tải thành cấu trúc thư mục ROM chuẩn của Batocera (hỗ trợ cả ảnh nằm trong thư mục `images`).
+Chương trình giúp xuất các mục yêu thích (favorites) từ RetroArch (file `content_favorites.lpl`) cùng với ảnh thumbnails đã tải thành cấu trúc thư mục ROM chuẩn của Batocera, và tự động sinh file `gamelist.xml` để Batocera nhận diện ảnh.
 
 ## Tính năng
 
@@ -12,6 +10,7 @@ Chương trình giúp xuất các mục yêu thích (favorites) từ RetroArch (
 - Copy ROM vào đúng thư mục hệ máy của Batocera (theo bảng map có sẵn).
 - Copy ảnh (ưu tiên Boxart, dự phòng Titles) vào thư mục `images` bên cạnh ROM.
 - Đổi tên ảnh theo tên file ROM để Batocera tự động ghép ảnh.
+- **Tạo file `gamelist.xml` cho từng hệ máy** (tự động liên kết ROM với ảnh).
 - Ghi log chi tiết ra console và file `export.log`.
 - Hỗ trợ cả Windows, Linux, macOS.
 
@@ -37,7 +36,7 @@ npm run build
 
 ## Sử dụng
 
-### Cú pháp
+### 1. Export dữ liệu từ RetroArch
 
 ```bash
 npm start -- "duong_dan_thu_muc_retroarch"
@@ -45,22 +44,20 @@ npm start -- "duong_dan_thu_muc_retroarch"
 
 Trong đó `duong_dan_thu_muc_retroarch` là thư mục gốc chứa `content_favorites.lpl` và `thumbnails`.
 
-### Ví dụ
+**Ví dụ:**
 
-**Windows:**
+Windows:
 ```bash
 npm start -- "D:\RetroArch"
 ```
 
-**Linux / macOS:**
+Linux / macOS:
 ```bash
 npm start -- "/home/user/RetroArch"
 ```
 
-### Kết quả
-
-- Thư mục `batocera_roms` được tạo ngay trong thư mục bạn chạy lệnh.
-- Cấu trúc bên trong:
+**Kết quả:**  
+Thư mục `batocera_roms` được tạo tại nơi chạy lệnh, với cấu trúc:
 
 ```
 batocera_roms/
@@ -74,8 +71,27 @@ batocera_roms/
     │   ├── Chrono Trigger.sfc
     │   └── images/
     │       └── Chrono Trigger.png
-    └── unknown/              # Các hệ máy chưa được map sẽ gom vào đây
+    └── unknown/              # Các hệ máy chưa được map
 ```
+
+### 2. Tạo file `gamelist.xml` (sau khi đã có `batocera_roms`)
+
+Sau khi export hoặc nếu bạn đã có sẵn thư mục `batocera_roms`, hãy chạy lệnh sau để sinh `gamelist.xml` cho từng hệ máy:
+
+```bash
+npm run gamelist
+```
+
+Hoặc:
+
+```bash
+npm start -- --gamelist
+```
+
+Lệnh này sẽ:
+- Quét tất cả các thư mục con bên trong `batocera_roms/roms/`
+- Với mỗi hệ máy, tạo file `gamelist.xml` liệt kê các game và đường dẫn ảnh (nếu có)
+- Ghi log số lượng game và ảnh được liên kết.
 
 ## Mapping hệ máy (dựa trên `db_name`)
 
@@ -116,21 +132,39 @@ Nếu `db_name` (hoặc `core_name`) của bạn không có trong bảng, chươ
 
 ## Quy tắc xử lý ảnh
 
-- Chương trình tìm ảnh trong thư mục `thumbnails/Named_Boxarts` trước, nếu không có thì tìm trong `thumbnails/Named_Titles`.
-- Chỉ chấp nhận định dạng `.png`, `.jpg`, `.jpeg`.
-- Ảnh được copy vào thư mục `images` (cùng cấp với ROM) và đổi tên thành `tên_file_ROM.png` (giữ nguyên phần mở rộng gốc của ảnh).
-- Không sử dụng ảnh từ `Named_Snaps` (screenshot).
+- Tìm ảnh trong `thumbnails/Named_Boxarts` trước, nếu không có thì tìm trong `thumbnails/Named_Titles`.
+- Hỗ trợ định dạng `.png`, `.jpg`, `.jpeg`.
+- Ảnh được copy vào `roms/<hệ_máy>/images/` và đổi tên theo tên file ROM (không phần mở rộng), giữ nguyên đuôi ảnh.
+- Không sử dụng ảnh từ `Named_Snaps`.
+
+## Cấu trúc file `gamelist.xml` được tạo
+
+Mỗi thư mục hệ máy (VD: `batocera_roms/roms/nes/`) sẽ có file `gamelist.xml` với nội dung:
+
+```xml
+<?xml version="1.0"?>
+<gameList>
+  <game>
+    <path>./Super Mario Bros.nes</path>
+    <image>./images/Super Mario Bros.png</image>
+  </game>
+  ...
+</gameList>
+```
+
+- Nếu game không có ảnh, thẻ `</image>` sẽ bị bỏ qua.
+- Đường dẫn ảnh là tương đối (bắt đầu bằng `./images/`), đúng chuẩn Batocera.
 
 ## Ghi chú
 
-- Nếu ROM đã tồn tại trong thư mục đích, nó sẽ bị **ghi đè** (vì cùng tên). Hãy kiểm tra kỹ nếu bạn muốn giữ bản cũ.
-- Nếu ảnh trùng tên cũng bị ghi đè.
-- Chương trình chỉ copy ROM chứ không di chuyển, do đó dữ liệu gốc vẫn được giữ nguyên.
-- Các ROM trùng đường dẫn tuyệt đối (cùng một file) sẽ chỉ được copy một lần để tránh trùng lặp trong output.
+- ROM và ảnh đã tồn tại trong thư mục đích sẽ bị **ghi đè** (cùng tên).
+- Chỉ copy, không di chuyển dữ liệu gốc.
+- Các ROM trùng đường dẫn tuyệt đối chỉ được copy một lần.
+- Sau khi tạo `gamelist.xml`, bạn có thể copy toàn bộ thư mục `batocera_roms` vào ổ `SHARE` của Batocera (thường là `/userdata/roms/`).
 
 ## Log
 
-Log được ghi đồng thời ra màn hình console và file `batocera_roms/export.log`. Mỗi dòng đều có timestamp và mức độ (INFO, WARN, ERROR). Cuối quá trình có bảng tổng kết:
+Log được ghi đồng thời ra console và file `batocera_roms/export.log`. Mỗi dòng đều có timestamp và mức độ (INFO, WARN, ERROR). Cuối quá trình có bảng tổng kết:
 
 ```
 ========== EXPORT SUMMARY ==========
@@ -144,6 +178,14 @@ Output folder: /home/user/retroarch-to-batocera/batocera_roms
 =====================================
 ```
 
+Khi chạy `npm run gamelist`:
+
+```
+[nes] Đã tạo gamelist.xml với 12 games, 10 có ảnh.
+[snes] Đã tạo gamelist.xml với 20 games, 18 có ảnh.
+Tổng cộng: 32 games, 28 ảnh được liên kết trong gamelist.xml
+```
+
 ## Xử lý lỗi thường gặp
 
 | Lỗi                                     | Nguyên nhân & cách khắc phục |
@@ -154,23 +196,24 @@ Output folder: /home/user/retroarch-to-batocera/batocera_roms
 | `ROM not found`                         | Đường dẫn ROM trong playlist không chính xác hoặc file đã bị xóa. |
 | `No image found for label ...`          | Không tìm thấy ảnh boxart/title tương ứng trong thumbnails. |
 | `Unknown system from db_name=...`       | Hệ máy chưa được map, kiểm tra và thêm vào bảng map. |
+| `Không tìm thấy thư mục batocera_roms`  | Chạy lệnh `--gamelist` nhưng chưa có thư mục `batocera_roms`. Hãy export trước. |
 
 ## Tùy chỉnh nâng cao
 
 ### Thay đổi thư mục output
 
-Hiện tại output luôn là `batocera_roms` ở thư mục hiện hành. Nếu muốn thay đổi, bạn có thể sửa biến `outputRoot` trong hàm `exportFavorites` (file `src/index.ts`).
+Hiện tại output luôn là `batocera_roms` ở thư mục hiện hành. Nếu muốn thay đổi, hãy sửa biến `outputRoot` trong hàm `exportFavorites` (file `src/index.ts`).
 
 ### Bổ sung mapping cho hệ máy mới
 
-Mở `src/index.ts`, tìm object `DBNAME_TO_SYSTEM`. Thêm một dòng theo mẫu:
+Mở `src/index.ts`, tìm object `DBNAME_TO_SYSTEM`. Thêm dòng:
 
 ```typescript
 'Nintendo - Virtual Boy.lpl': 'virtualboy',
-'Nintendo - Virtual Boy': 'virtualboy',   // dự phòng không đuôi .lpl
+'Nintendo - Virtual Boy': 'virtualboy',
 ```
 
-Nếu bạn muốn dùng `core_name` làm fallback, hãy sửa object `CORE_TO_SYSTEM` tương tự.
+Nếu muốn dùng `core_name` làm fallback, sửa object `CORE_TO_SYSTEM` tương tự.
 
 Sau khi sửa, build lại:
 

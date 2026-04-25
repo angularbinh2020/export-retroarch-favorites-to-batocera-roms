@@ -288,13 +288,29 @@ async function exportFavorites(retroarchPath: string) {
 // 6. Entry point
 // ------------------------------
 async function main() {
-  const retroarchPath = process.argv[2];
-  if (!retroarchPath) {
-    console.error("Usage: npm start -- /path/to/retroarch/folder");
-    console.error('Example: npm start -- "C:\\RetroArch"');
+  const args = process.argv.slice(2);
+  if (args.includes("--gamelist") || args.includes("-g")) {
+    // Chế độ chỉ tạo gamelist từ thư mục batocera_roms mặc định
+    const batoceraRomsPath = path.join(process.cwd(), "batocera_roms");
+    if (!fs.existsSync(batoceraRomsPath)) {
+      console.error(
+        `Không tìm thấy thư mục batocera_roms tại: ${batoceraRomsPath}`,
+      );
+      process.exit(1);
+    }
+    await generateGamelist(batoceraRomsPath);
+    return;
+  }
+
+  // Chế độ export từ RetroArch
+  if (args.length === 0) {
+    console.error("Usage:");
+    console.error("  Export favorites: npm start -- /path/to/retroarch");
+    console.error("  Generate gamelist: npm start -- --gamelist");
     process.exit(1);
   }
 
+  const retroarchPath = args[0];
   const absolutePath = path.resolve(retroarchPath);
   if (!fs.existsSync(absolutePath)) {
     console.error(`RetroArch folder not found: ${absolutePath}`);
@@ -303,7 +319,117 @@ async function main() {
 
   await exportFavorites(absolutePath);
 }
+// ... (phần import và các hàm log, findImageFile, getSystemFolder giữ nguyên)
 
+// ------------------------------
+// Hàm tạo gamelist.xml cho thư mục batocera_roms
+// ------------------------------
+async function generateGamelist(batoceraRomsPath: string) {
+  const romsRoot = path.join(batoceraRomsPath, "roms");
+  if (!fs.existsSync(romsRoot)) {
+    log(`Không tìm thấy thư mục roms tại: ${romsRoot}`, "ERROR");
+    return;
+  }
+
+  // Duyệt các thư mục con trong roms (mỗi thư mục là một hệ máy)
+  const systemDirs = await fs.readdir(romsRoot);
+  let totalGames = 0;
+  let totalImages = 0;
+
+  for (const system of systemDirs) {
+    const systemPath = path.join(romsRoot, system);
+    const stat = await fs.stat(systemPath);
+    if (!stat.isDirectory()) continue;
+
+    const imagesPath = path.join(systemPath, "images");
+    const hasImages = fs.existsSync(imagesPath);
+
+    // Lấy danh sách file ROM (bỏ qua thư mục images và các file không phải ROM)
+    const files = await fs.readdir(systemPath);
+    const romFiles = files.filter((file) => {
+      const filePath = path.join(systemPath, file);
+      // Bỏ qua thư mục images và các file ẩn
+      if (fs.statSync(filePath).isDirectory()) return false;
+      // Có thể mở rộng danh sách extension
+      const ext = path.extname(file).toLowerCase();
+      const romExtensions = [
+        ".nes",
+        ".sfc",
+        ".smd",
+        ".gen",
+        ".zip",
+        ".iso",
+        ".bin",
+        ".gba",
+        ".gb",
+        ".gbc",
+        ".nds",
+        ".n64",
+        ".z64",
+        ".v64",
+        ".7z",
+        ".cue",
+        ".mdf",
+        ".pbp",
+        ".chd",
+        ".wbfs",
+        ".iso",
+        ".cso",
+        ".elf",
+        ".prx",
+      ];
+      return romExtensions.includes(ext);
+    });
+
+    if (romFiles.length === 0) continue;
+
+    // Tạo nội dung gamelist.xml
+    let xmlContent = '<?xml version="1.0"?>\n<gameList>\n';
+    let gameCount = 0;
+    let imageCount = 0;
+
+    for (const romFile of romFiles) {
+      const romBaseName = path.basename(romFile, path.extname(romFile));
+      let imageFound = false;
+      let imagePathRelative = "";
+
+      if (hasImages) {
+        // Tìm file ảnh với các extension khả dụng
+        const imageExtensions = [".png", ".jpg", ".jpeg"];
+        for (const ext of imageExtensions) {
+          const candidate = path.join(imagesPath, `${romBaseName}${ext}`);
+          if (fs.existsSync(candidate)) {
+            imageFound = true;
+            imagePathRelative = `./images/${romBaseName}${ext}`;
+            break;
+          }
+        }
+      }
+
+      xmlContent += `  <game>\n`;
+      xmlContent += `    <path>./${romFile}</path>\n`;
+      if (imageFound) {
+        xmlContent += `    <td>${imagePathRelative}</image>\n`;
+        imageCount++;
+      }
+      xmlContent += `  </game>\n`;
+      gameCount++;
+    }
+
+    xmlContent += "</gameList>";
+    const gamelistPath = path.join(systemPath, "gamelist.xml");
+    await fs.writeFile(gamelistPath, xmlContent, "utf8");
+    log(
+      `[${system}] Đã tạo gamelist.xml với ${gameCount} games, ${imageCount} có ảnh.`,
+    );
+    totalGames += gameCount;
+    totalImages += imageCount;
+  }
+
+  log(
+    `\nTổng cộng: ${totalGames} games, ${totalImages} ảnh được liên kết trong gamelist.xml`,
+  );
+}
 main().catch((err) => {
   console.error("Fatal error:", err);
   process.exit(1);

@@ -1,45 +1,91 @@
-import fs from 'fs-extra';
-import path from 'path';
+import fs from "fs-extra";
+import path from "path";
 
 // ------------------------------
-// 1. Mapping core name -> Batocera system folder
+// 1. Mapping db_name (từ playlist) hoặc core_name -> Batocera system folder
 // ------------------------------
-const CORE_TO_SYSTEM: Record<string, string> = {
+// Lưu ý: db_name thường có dạng "Nintendo - Nintendo Entertainment System.lpl"
+// Chúng ta map cả chuỗi có hoặc không có .lpl
+const DBNAME_TO_SYSTEM: Record<string, string> = {
   // Nintendo
-  'Nintendo - Nintendo Entertainment System': 'nes',
-  'Nintendo - Super Nintendo Entertainment System': 'snes',
-  'Nintendo - Nintendo 64': 'n64',
-  'Nintendo - Game Boy': 'gb',
-  'Nintendo - Game Boy Color': 'gbc',
-  'Nintendo - Game Boy Advance': 'gba',
-  'Nintendo - Nintendo DS': 'nds',
-  'Nintendo - Nintendo 3DS': '3ds',
+  "Nintendo - Nintendo Entertainment System.lpl": "nes",
+  "Nintendo - Nintendo Entertainment System": "nes",
+  "Nintendo - Super Nintendo Entertainment System.lpl": "snes",
+  "Nintendo - Super Nintendo Entertainment System": "snes",
+  "Nintendo - Nintendo 64.lpl": "n64",
+  "Nintendo - Nintendo 64": "n64",
+  "Nintendo - Game Boy.lpl": "gb",
+  "Nintendo - Game Boy": "gb",
+  "Nintendo - Game Boy Color.lpl": "gbc",
+  "Nintendo - Game Boy Color": "gbc",
+  "Nintendo - Game Boy Advance.lpl": "gba",
+  "Nintendo - Game Boy Advance": "gba",
+  "Nintendo - Nintendo DS.lpl": "nds",
+  "Nintendo - Nintendo DS": "nds",
+  "Nintendo - Nintendo 3DS.lpl": "3ds",
+  "Nintendo - Nintendo 3DS": "3ds",
 
   // Sega
-  'Sega - Master System': 'mastersystem',
-  'Sega - Mega Drive - Genesis': 'megadrive',
-  'Sega - Game Gear': 'gamegear',
-  'Sega - Saturn': 'saturn',
-  'Sega - Dreamcast': 'dreamcast',
+  "Sega - Master System.lpl": "mastersystem",
+  "Sega - Master System": "mastersystem",
+  "Sega - Mega Drive - Genesis.lpl": "megadrive",
+  "Sega - Mega Drive - Genesis": "megadrive",
+  "Sega - Game Gear.lpl": "gamegear",
+  "Sega - Game Gear": "gamegear",
+  "Sega - Saturn.lpl": "saturn",
+  "Sega - Saturn": "saturn",
+  "Sega - Dreamcast.lpl": "dreamcast",
+  "Sega - Dreamcast": "dreamcast",
 
   // Sony
-  'Sony - PlayStation': 'psx',
-  'Sony - PlayStation 2': 'ps2',
-  'Sony - PlayStation Portable': 'psp',
+  "Sony - PlayStation.lpl": "psx",
+  "Sony - PlayStation": "psx",
+  "Sony - PlayStation 2.lpl": "ps2",
+  "Sony - PlayStation 2": "ps2",
+  "Sony - PlayStation Portable.lpl": "psp",
+  "Sony - PlayStation Portable": "psp",
 
   // Atari
-  'Atari - 2600': 'atari2600',
-  'Atari - 5200': 'atari5200',
-  'Atari - 7800': 'atari7800',
-  'Atari - Lynx': 'lynx',
+  "Atari - 2600.lpl": "atari2600",
+  "Atari - 2600": "atari2600",
+  "Atari - 5200.lpl": "atari5200",
+  "Atari - 5200": "atari5200",
+  "Atari - 7800.lpl": "atari7800",
+  "Atari - 7800": "atari7800",
+  "Atari - Lynx.lpl": "lynx",
+  "Atari - Lynx": "lynx",
 
   // Other
-  'MAME': 'mame',
-  'Arcade': 'arcade',
-  'Neo Geo': 'neogeo',
-  'PC Engine - TurboGrafx 16': 'pcengine',
-  'Commodore - Amiga': 'amiga',
-  'ZX Spectrum': 'zxspectrum',
+  "MAME.lpl": "mame",
+  MAME: "mame",
+  "Arcade.lpl": "arcade",
+  Arcade: "arcade",
+  "Neo Geo.lpl": "neogeo",
+  "Neo Geo": "neogeo",
+  "PC Engine - TurboGrafx 16.lpl": "pcengine",
+  "PC Engine - TurboGrafx 16": "pcengine",
+  "Commodore - Amiga.lpl": "amiga",
+  "Commodore - Amiga": "amiga",
+  "ZX Spectrum.lpl": "zxspectrum",
+  "ZX Spectrum": "zxspectrum",
+};
+
+// Dự phòng: map theo core_name cho các trường hợp không có db_name
+const CORE_TO_SYSTEM: Record<string, string> = {
+  "Nintendo - NES": "nes",
+  "Nintendo - SNES": "snes",
+  "Nintendo - N64": "n64",
+  "Nintendo - Game Boy": "gb",
+  "Nintendo - Game Boy Color": "gbc",
+  "Nintendo - Game Boy Advance": "gba",
+  "Nintendo - DS": "nds",
+  "Sega - Mega Drive/Genesis": "megadrive",
+  "Sega - Master System": "mastersystem",
+  "Sega - Game Gear": "gamegear",
+  "Sony - PlayStation": "psx",
+  "Sony - PlayStation 2": "ps2",
+  "Sony - PlayStation Portable": "psp",
+  MAME: "mame",
 };
 
 // ------------------------------
@@ -48,25 +94,25 @@ const CORE_TO_SYSTEM: Record<string, string> = {
 let logStream: fs.WriteStream;
 
 function initLogFile(outputDir: string) {
-  const logPath = path.join(outputDir, 'export.log');
+  const logPath = path.join(outputDir, "export.log");
   fs.ensureDirSync(outputDir);
-  logStream = fs.createWriteStream(logPath, { flags: 'a' });
+  logStream = fs.createWriteStream(logPath, { flags: "a" });
   log(`Log file created at ${logPath}`);
 }
 
-function log(message: string, level: 'INFO' | 'WARN' | 'ERROR' = 'INFO') {
+function log(message: string, level: "INFO" | "WARN" | "ERROR" = "INFO") {
   const timestamp = new Date().toISOString();
   const formatted = `[${timestamp}] [${level}] ${message}`;
   console.log(formatted);
-  if (logStream) logStream.write(formatted + '\n');
+  if (logStream) logStream.write(formatted + "\n");
 }
 
 // ------------------------------
 // 3. Find image file (boxart or title) from thumbnails folder
 // ------------------------------
 function findImageFile(thumbnailsDir: string, label: string): string | null {
-  const possibleDirs = ['Named_Boxarts', 'Named_Titles'];
-  const extensions = ['.png', '.jpg', '.jpeg'];
+  const possibleDirs = ["Named_Boxarts", "Named_Titles"];
+  const extensions = [".png", ".jpg", ".jpeg"];
 
   for (const dir of possibleDirs) {
     const baseDir = path.join(thumbnailsDir, dir);
@@ -83,20 +129,35 @@ function findImageFile(thumbnailsDir: string, label: string): string | null {
 }
 
 // ------------------------------
-// 4. Main export function
+// 4. Get system folder from db_name or core_name
+// ------------------------------
+function getSystemFolder(dbName?: string, coreName?: string): string {
+  if (dbName) {
+    // Try direct match first
+    if (DBNAME_TO_SYSTEM[dbName]) return DBNAME_TO_SYSTEM[dbName];
+    // Try without .lpl if present
+    const withoutExt = dbName.replace(/\.lpl$/i, "");
+    if (DBNAME_TO_SYSTEM[withoutExt]) return DBNAME_TO_SYSTEM[withoutExt];
+  }
+  if (coreName && CORE_TO_SYSTEM[coreName]) return CORE_TO_SYSTEM[coreName];
+  return "unknown";
+}
+
+// ------------------------------
+// 5. Main export function
 // ------------------------------
 async function exportFavorites(retroarchPath: string) {
-  const playlistPath = path.join(retroarchPath, 'content_favorites.lpl');
-  const thumbnailsPath = path.join(retroarchPath, 'thumbnails');
-  const outputRoot = path.join(process.cwd(), 'batocera_roms');
+  const playlistPath = path.join(retroarchPath, "content_favorites.lpl");
+  const thumbnailsPath = path.join(retroarchPath, "thumbnails");
+  const outputRoot = path.join(process.cwd(), "batocera_roms");
 
   // Validate input
   if (!fs.existsSync(playlistPath)) {
-    log(`Playlist file not found: ${playlistPath}`, 'ERROR');
+    log(`Playlist file not found: ${playlistPath}`, "ERROR");
     process.exit(1);
   }
   if (!fs.existsSync(thumbnailsPath)) {
-    log(`Thumbnails folder not found: ${thumbnailsPath}`, 'ERROR');
+    log(`Thumbnails folder not found: ${thumbnailsPath}`, "ERROR");
     process.exit(1);
   }
 
@@ -110,12 +171,12 @@ async function exportFavorites(retroarchPath: string) {
   try {
     playlist = await fs.readJson(playlistPath);
   } catch (err) {
-    log(`Failed to parse playlist JSON: ${err}`, 'ERROR');
+    log(`Failed to parse playlist JSON: ${err}`, "ERROR");
     process.exit(1);
   }
 
   if (!playlist.items || !Array.isArray(playlist.items)) {
-    log('Invalid playlist structure: missing "items" array', 'ERROR');
+    log('Invalid playlist structure: missing "items" array', "ERROR");
     process.exit(1);
   }
 
@@ -128,41 +189,46 @@ async function exportFavorites(retroarchPath: string) {
   let skippedNoImage = 0;
   let unknownSystemCount = 0;
 
-  // Keep track of already copied ROMs to avoid duplicate work (by absolute path)
   const processedRoms = new Set<string>();
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const romPathRaw = item.path;
-    const coreName = item.core_name || item.core_path || '';
-    const label = item.label || path.basename(romPathRaw, path.extname(romPathRaw));
+    const dbName = item.db_name; // e.g., "Nintendo - Super Nintendo Entertainment System.lpl"
+    const coreName = item.core_name; // fallback
+    const label =
+      item.label || path.basename(romPathRaw, path.extname(romPathRaw));
 
     if (!romPathRaw) {
-      log(`Item ${i + 1}: missing ROM path, skipped`, 'WARN');
+      log(`Item ${i + 1}: missing ROM path, skipped`, "WARN");
       skippedNoRom++;
       continue;
     }
 
-    // Resolve absolute path (in case it's relative)
-    const romPath = path.isAbsolute(romPathRaw) ? romPathRaw : path.join(retroarchPath, romPathRaw);
+    // Resolve absolute ROM path
+    const romPath = path.isAbsolute(romPathRaw)
+      ? romPathRaw
+      : path.join(retroarchPath, romPathRaw);
 
     if (!fs.existsSync(romPath)) {
-      log(`Item ${i + 1}: ROM not found: ${romPath}`, 'WARN');
+      log(`Item ${i + 1}: ROM not found: ${romPath}`, "WARN");
       skippedNoRom++;
       continue;
     }
 
-    // Get system folder from core name
-    let systemFolder = CORE_TO_SYSTEM[coreName];
-    if (!systemFolder) {
-      systemFolder = 'unknown';
+    // Get system folder using db_name (priority) then core_name
+    const systemFolder = getSystemFolder(dbName, coreName);
+    if (systemFolder === "unknown") {
       unknownSystemCount++;
-      log(`Item ${i + 1}: Unknown core "${coreName}" → mapping to "unknown"`, 'WARN');
+      log(
+        `Item ${i + 1}: Unknown system from db_name="${dbName}" core_name="${coreName}" → mapping to "unknown"`,
+        "WARN",
+      );
     }
 
     // Destination directories
-    const romDestDir = path.join(outputRoot, 'roms', systemFolder);
-    const imageDestDir = path.join(romDestDir, 'images');
+    const romDestDir = path.join(outputRoot, "roms", systemFolder);
+    const imageDestDir = path.join(romDestDir, "images");
     await fs.ensureDir(romDestDir);
     await fs.ensureDir(imageDestDir);
 
@@ -170,7 +236,7 @@ async function exportFavorites(retroarchPath: string) {
     const romBaseName = path.basename(romPath, path.extname(romPath));
     const destRomPath = path.join(romDestDir, romFileName);
 
-    // Copy ROM (if not already copied)
+    // Copy ROM if not already copied
     if (!processedRoms.has(romPath)) {
       try {
         await fs.copy(romPath, destRomPath, { overwrite: true });
@@ -178,16 +244,19 @@ async function exportFavorites(retroarchPath: string) {
         copiedRomCount++;
         processedRoms.add(romPath);
       } catch (err) {
-        log(`Failed to copy ROM ${romFileName}: ${err}`, 'ERROR');
+        log(`Failed to copy ROM ${romFileName}: ${err}`, "ERROR");
       }
     } else {
-      log(`ROM already copied (duplicate): ${romFileName}`, 'INFO');
+      log(`ROM already copied (duplicate): ${romFileName}`, "INFO");
     }
 
     // Handle image
-    const imageSourcePath = findImageFile(thumbnailsPath, label);
+    const imageSourcePath = findImageFile(
+      path.join(thumbnailsPath, dbName.replace(".lpl", "")),
+      label,
+    );
     if (imageSourcePath) {
-      const imageExt = path.extname(imageSourcePath); // .png, .jpg, ...
+      const imageExt = path.extname(imageSourcePath);
       const destImageName = `${romBaseName}${imageExt}`;
       const destImagePath = path.join(imageDestDir, destImageName);
       try {
@@ -195,16 +264,16 @@ async function exportFavorites(retroarchPath: string) {
         log(`Copied image: ${label} → images/${destImageName}`);
         copiedImageCount++;
       } catch (err) {
-        log(`Failed to copy image for "${label}": ${err}`, 'ERROR');
+        log(`Failed to copy image for "${label}": ${err}`, "ERROR");
       }
     } else {
-      log(`No image found for label "${label}" (ROM: ${romFileName})`, 'WARN');
+      log(`No image found for label "${label}" (ROM: ${romFileName})`, "WARN");
       skippedNoImage++;
     }
   }
 
   // Final summary
-  log('\n========== EXPORT SUMMARY ==========');
+  log("\n========== EXPORT SUMMARY ==========");
   log(`Total items in playlist: ${items.length}`);
   log(`ROMs copied: ${copiedRomCount}`);
   log(`Images copied: ${copiedImageCount}`);
@@ -212,16 +281,16 @@ async function exportFavorites(retroarchPath: string) {
   log(`Skipped (no image found): ${skippedNoImage}`);
   log(`Unknown systems mapped: ${unknownSystemCount}`);
   log(`Output folder: ${outputRoot}`);
-  log('=====================================\n');
+  log("=====================================\n");
 }
 
 // ------------------------------
-// 5. Entry point
+// 6. Entry point
 // ------------------------------
 async function main() {
   const retroarchPath = process.argv[2];
   if (!retroarchPath) {
-    console.error('Usage: npm start -- /path/to/retroarch/folder');
+    console.error("Usage: npm start -- /path/to/retroarch/folder");
     console.error('Example: npm start -- "C:\\RetroArch"');
     process.exit(1);
   }
@@ -235,7 +304,7 @@ async function main() {
   await exportFavorites(absolutePath);
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err);
+main().catch((err) => {
+  console.error("Fatal error:", err);
   process.exit(1);
 });
